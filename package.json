@@ -1,0 +1,16 @@
+{
+  "name": "orbit-osu-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An independently implemented osu!standard beatmap reader and autoplay viewer.",
+  "scripts": {
+    "dev": "node server/index.mjs",
+    "build": "tsc --noEmit && vite build",
+    "start": "node server/index.mjs --production",
+    "test": "tsx --test tests/*.test.ts && node --test tests/*.test.mjs"
+  },
+  "engines": { "node": ">=22.12" },
+  "dependencies": { "fflate": "0.8.3" },
+  "devDependencies": { "typescript": "7.0.2", "vite": "8.3.4", "tsx": "4.23.15", "@types/node": "^24.0.0" }
+}

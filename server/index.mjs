@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +11,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.env.PORT || 4173);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid PORT');
 const production = process.argv.includes('--production');
+const lan = process.argv.includes('--lan');
+const privateIPv4 = address => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(address);
+const lanAddresses = lan ? [...new Set(Object.values(networkInterfaces()).flat()
+  .filter(item => item.family === 'IPv4' && !item.internal && privateIPv4(item.address))
+  .map(item => item.address))] : [];
+const allowedHosts = new Set(['127.0.0.1', 'localhost', ...lanAddresses].map(address => address + ':' + port));
+const lanUrls = lanAddresses.map(address => 'http://' + address + ':' + port);
 const resources = createResources(path.join(root, '.cache', 'beatmaps'));
 const vite = production ? null : await (await import('vite')).createServer({root, server: {middlewareMode: true}, appType: 'spa'});
 const json = (res, code, value) => {res.writeHead(code, {'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store'}); res.end(JSON.stringify(value));};
@@ -17,14 +25,16 @@ const mime = {'.html':'text/html; charset=utf-8', '.js':'text/javascript', '.css
 const server = http.createServer(async (req, res) => {
   try {
     const host = req.headers.host ?? '';
-    if (![ `127.0.0.1:${port}`, `localhost:${port}` ].includes(host)) return json(res, 403, {error:'仅允许本机访问'});
+    if (!allowedHosts.has(host)) return json(res, 403, {error:'仅允许本机访问'});
+    const peer = (req.socket.remoteAddress ?? '').replace(/^::ffff:/, '');
+    if (lan && peer !== '127.0.0.1' && !privateIPv4(peer)) return json(res, 403, {error:'LAN clients only'});
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
     const url = new URL(req.url, `http://${host}`);
     if (!['GET', 'HEAD'].includes(req.method)) return json(res, 405, {error:'Method not allowed'});
-    if (url.pathname === '/api/health') return json(res, 200, {name:'orbit-osu-reader', version:'0.1.0', engine:'independent-typescript-canvas2d'});
+    if (url.pathname === '/api/health') return json(res, 200, {name:'orbit-osu-reader', version:'0.1.0', engine:'independent-typescript-canvas2d', accessMode:lan ? 'lan' : 'local', lanUrls});
     if (url.pathname.startsWith('/api/')) {
-      if (req.headers.origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(req.headers.origin)) return json(res, 403, {error:'跨源请求已拒绝'});
+      if ((req.headers.origin && req.headers.origin !== `http://${host}`) || req.headers['sec-fetch-site'] === 'cross-site') return json(res, 403, {error:'跨源请求已拒绝'});
       if(url.pathname==='/api/skins/default'){
         try{
           const bytes=await fs.readFile(path.join(root,'.cache','skins','default.osk'));
@@ -50,6 +60,10 @@ const server = http.createServer(async (req, res) => {
     res.end(req.method === 'HEAD' ? undefined : bytes);
   } catch (error) { console.error(error.message); if (!res.headersSent) json(res, error.status ?? 502, {error:error.message}); else res.end(); }
 });
-server.listen(port, '127.0.0.1', () => console.log(`\n  ORBIT · osu! Map Reader\n  http://127.0.0.1:${port}\n  ${production ? 'Production' : 'Development'} · local only\n`));
+server.listen(port, lan ? '0.0.0.0' : '127.0.0.1', () => {
+  console.log('\n  ORBIT - osu! Map Reader\n  http://127.0.0.1:' + port);
+  for (const url of lanUrls) console.log('  LAN: ' + url);
+  console.log('  ' + (production ? 'Production' : 'Development') + (lan ? ' - private IPv4 LAN access\n' : ' - local only\n'));
+});
 const shutdown = async () => { await vite?.close(); server.close(); };
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

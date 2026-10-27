@@ -51,3 +51,19 @@ test('worker includes shared/inline storyboard images, animation frames and vide
   await invoke('open',{bytes:bytes.buffer});const result=(await invoke('select',{entry:'folder/map.osu'})).result;
   assert.equal(result.scene.storyboard.sprites.length,2);assert.equal(result.scene.images.length,3);assert.equal(result.scene.video.event.start,250);assert.equal(result.scene.video.bytes.length,3);assert.equal(result.map.duration,4000);
 });
+
+test('legacy map checksum matching works on an HTTP LAN without Web Crypto',async()=>{
+  const old=strToU8(map.replace('BeatmapID: 123\n',''));
+  const {createHash}=await import('node:crypto');
+  const checksum=createHash('sha256').update(old).digest('hex');
+  const bytes=zipSync({'map.osu':old});
+  const descriptor=Object.getOwnPropertyDescriptor(globalThis,'crypto');
+  Object.defineProperty(globalThis,'crypto',{value:{},configurable:true});
+  try{
+    const result=await invoke('open',{bytes:bytes.buffer,id:131564,setId:41686,checksum});
+    assert.equal(result.error,undefined);
+    assert.equal(result.result.catalog[0].id,131564);
+    const mismatch=await invoke('open',{bytes:bytes.buffer,id:131564,setId:41686,checksum:'0'.repeat(64)});
+    assert.equal(mismatch.result.catalog[0].id,0);
+  }finally{if(descriptor)Object.defineProperty(globalThis,'crypto',descriptor);else Reflect.deleteProperty(globalThis,'crypto');}
+});

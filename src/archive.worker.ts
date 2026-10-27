@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 import { unzipSync, strFromU8 } from 'fflate';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { parseBeatmap } from './engine/parser';
 import {parseStoryboard,storyboardAssets} from './engine/storyboard';
 import {csv} from './engine/parser';
@@ -44,8 +46,8 @@ self.onmessage = async ({data}) => {
         if (mode !== 0) continue;
         let id=Number(value('BeatmapID'));
         if(!(id>0)&&data.id>0&&/^[a-f0-9]{64}$/.test(data.checksum??'')){
-          const digest=await crypto.subtle.digest('SHA-256',bytes.slice().buffer as ArrayBuffer);
-          const checksum=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+          // Web Crypto is unavailable on plain-HTTP LAN origins. Keep exact-byte validation.
+          const checksum=bytesToHex(sha256(bytes));
           if(checksum===data.checksum){id=data.id;legacyIds.set(entry,{id,setId:data.setId});}
         }
         catalog.push({entry, id, version:value('Version') || entry, ar:Number(value('ApproachRate') || value('OverallDifficulty') || 5), cs:Number(value('CircleSize') || 5), od:Number(value('OverallDifficulty') || 5), mode});

@@ -11,3 +11,10 @@ test('subpath deployment keeps APIs and shared previews inside the app namespace
   assert.equal(config.pollProgress, false);
   assert.equal(createDeployment().api('search?q=1'), '/api/search?q=1');
 });
+
+test('loaded and local map history stays under the configured app base', () => {
+  const config = createDeployment('/orbit/', '/api/orbit/');
+  assert.equal(config.page(new URLSearchParams({b:'738063'})), '/orbit/?b=738063');
+  assert.equal(config.page(new URLSearchParams()), '/orbit/');
+  assert.equal(createDeployment().page('b=738063'), '/?b=738063');
+});

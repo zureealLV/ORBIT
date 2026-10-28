@@ -4,10 +4,14 @@ export function createDeployment(appBase = '/', apiBase = '/api/', pollProgress 
     return path.endsWith('/') ? path : path + '/';
   };
   appBase = normalize(appBase); apiBase = normalize(apiBase);
+  const page = (query: string | URLSearchParams = '') => {
+    const value = String(query);
+    return appBase + (value ? `?${value}` : '');
+  };
   return {
-    appBase, pollProgress,
+    appBase, pollProgress, page,
     api: (path: string) => apiBase + path.replace(/^\/+/, ''),
-    share: (origin: string, query: string | URLSearchParams) => `${origin}${appBase}?${query}`,
+    share: (origin: string, query: string | URLSearchParams) => origin + page(query),
   };
 }
 

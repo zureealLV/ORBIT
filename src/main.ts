@@ -166,7 +166,7 @@ async function selectDifficulty(entry:string){
   const official=$<HTMLAnchorElement>('official-link');official.hidden=map.id<=0;official.href=`https://osu.ppy.sh/beatmaps/${map.id}`;
   $<HTMLButtonElement>('share').disabled=!archiveId||map.id<=0;
   document.title=`${map.title} [${map.version}] · ORBIT`;
-  const params=new URLSearchParams();if(archiveId&&map.id>0)params.set('b',String(map.id));history.replaceState(null,'',params.size?`/?${params}`:'/');
+  const params=new URLSearchParams();if(archiveId&&map.id>0)params.set('b',String(map.id));history.replaceState(null,'',deployment.page(params));
   if(archiveId)$<HTMLInputElement>('beatmap-input').value=map.id>0?String(map.id):'';
   status(audioError||(!result.audio?'音乐文件缺失，当前仅播放画面。':`已载入 ${map.objects.length} 个物件 · ${sounds.customLoaded?'已解码 '+sounds.customLoaded+' 个谱面音效':'使用原创合成打击音'}`),audioError||!result.audio?'warning':'ready');
   if(map.warnings.length)toast(map.warnings.join('；'));

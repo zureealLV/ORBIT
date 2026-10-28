@@ -1,3 +1,4 @@
+import {deployment} from './deployment';
 export interface SearchRow {id:number;setId:number;title:string;artist:string;creator:string;version:string;stars:number;length:number;bpm:number;ar:number;cs:number;od:number;video:boolean;storyboard:boolean;exact:boolean;cover:string}
 export interface SearchGroup extends SearchRow {difficultyCount:number;minStars:number;maxStars:number}
 /** One card per beatmap set; an exact difficulty remains the click target. */
@@ -26,7 +27,7 @@ export function mountSearch(input:HTMLInputElement,box:HTMLElement,onSelect:(id:
   async function run(id:string,token:number) {
     controller=new AbortController();resize(()=>{show();heading.textContent='正在匹配谱面…';list.replaceChildren();});
     try {
-      const response=await fetch(`/api/search?q=${id}`,{signal:controller.signal});const data=await response.json();
+      const response=await fetch(deployment.api(`search?q=${id}`),{signal:controller.signal});const data=await response.json();
       if(token!==version)return;if(!response.ok)throw new Error(data.error||'搜索失败');
       const rows=groupSearchRows(data.results);
       resize(()=>{

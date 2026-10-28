@@ -1,3 +1,4 @@
+import {deployment} from './deployment';
 import {mountSearch,searchId} from './search';
 import {BackgroundScene} from './engine/scene';
 import './style.css';
@@ -27,7 +28,7 @@ const icons = {
 };
 const icon=(name:keyof typeof icons)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
 document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
-  <header class="site-header"><a class="brand" href="/" aria-label="ORBIT 首页">${icon('orbit')}<span>ORBIT<span class="brand-dot">.</span></span></a><div class="header-divider"></div><span class="header-caption">osu! map reader</span><span class="header-tag"><i></i> 独立读谱引擎</span><a class="source-link" href="https://osu.ppy.sh/beatmapsets" target="_blank" rel="noreferrer">寻找谱面 <span>↗</span></a></header>
+  <header class="site-header"><a class="brand" href="${deployment.appBase}" aria-label="ORBIT 首页">${icon('orbit')}<span>ORBIT<span class="brand-dot">.</span></span></a><div class="header-divider"></div><span class="header-caption">osu! map reader</span><span class="header-tag"><i></i> 独立读谱引擎</span><a class="source-link" href="https://osu.ppy.sh/beatmapsets" target="_blank" rel="noreferrer">寻找谱面 <span>↗</span></a></header>
   <main>
     <section class="intro"><div><h1>谱面工作台<span class="intro-label">osu!standard</span></h1></div></section>
     <form id="search-form" class="search-row"><div class="search-input-wrap">${icon('search')}<label class="sr-only" for="beatmap-input">谱面 ID 或 osu! 链接</label><input id="beatmap-input" autocomplete="off" placeholder="输入谱面 / 谱面集 ID，自动匹配封面与难度" spellcheck="false"/><kbd>Enter ↵</kbd></div><button class="primary" id="load-button" type="submit">读取谱面 <span>↗</span></button><button class="import-button" id="import-button" type="button">${icon('upload')}<span>导入 .osz</span></button><input id="file-input" class="sr-only" type="file" accept=".osz" tabindex="-1"/></form>
@@ -127,7 +128,7 @@ async function selectSkin(preset:string){
   $('skin-status').textContent='正在解包并解码皮肤…';
   try{
     if(preset==='custom'&&customSkin){await applySkin(customSkin,'custom',token);return;}
-    const res=await fetch('/api/skins/default');if(!res.ok)throw new Error('尚未安装默认皮肤，可点击 ＋ 导入 .osk。');
+    const res=await fetch(deployment.api('skins/default'));if(!res.ok)throw new Error('尚未安装默认皮肤，可点击 ＋ 导入 .osk。');
     await loadSkin(await res.arrayBuffer(),'default',token);
   }catch(error){if(token===skinToken){$<HTMLSelectElement>('skin-select').value=activeSkinPreset;$('skin-status').textContent=(error as Error).message;}}
 }
@@ -175,9 +176,9 @@ async function loadOnline(value:string){
   if(busy)return;search.hide();let id:number;try{id=beatmapId(value);}catch(error){status((error as Error).message,'error');$<HTMLInputElement>('beatmap-input').focus();return;}
   const token=++loadToken,start=performance.now();setBusy(true,'正在定位谱面…');status('正在连接谱面资源…','loading');$('load-detail').textContent='';
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);
-  const poll=setInterval(async()=>{try{const res=await fetch(`/api/beatmaps/${id}/progress`);if(token!==loadToken)return;const info=await res.json();if(info.detail){$('busy-text').textContent=info.detail;status(info.detail,'loading');}}catch{}},700);
+  const poll=deployment.pollProgress?setInterval(async()=>{try{const res=await fetch(deployment.api(`beatmaps/${id}/progress`));if(token!==loadToken)return;const info=await res.json();if(info.detail){$('busy-text').textContent=info.detail;status(info.detail,'loading');}}catch{}},700):undefined;
   try{
-    const res=await fetch(`/api/beatmaps/${id}/archive?media=full-v1`,{signal:controller.signal});if(!res.ok)throw new Error((await res.json()).error||`HTTP ${res.status}`);
+    const res=await fetch(deployment.api(`beatmaps/${id}/archive?media=full-v1`),{signal:controller.signal});if(!res.ok)throw new Error((await res.json()).error||`HTTP ${res.status}`);
     const source=res.headers.get('X-Resource-Source')??'online',bytes=await res.arrayBuffer();
     clearInterval(poll);$('busy-text').textContent='解包、解析滑条与音频…';await setArchive(bytes,id,{checksum:res.headers.get('X-Beatmap-Checksum'),setId:Number(res.headers.get('X-Beatmap-Set'))});
     $('load-detail').textContent=`${source==='cache'?'CACHE':source.toUpperCase()} · ${((performance.now()-start)/1000).toFixed(1)}s`;
@@ -214,7 +215,7 @@ function updateModPlayback(){const mods=renderer.options.mods,rate=modSpeed(mods
 function setMods(mods:VisualMods){$('blinds-control').hidden=!modOn(mods,'BL');renderer.options.mods=mods;updateModPlayback();sounds.reset(clock.time());if(map){const d=difficulty(map,mods);applyStacking(map,d.ar,d.cs);renderer.rebuildPaths();syncStats();}}
 const syncMods=mountModPanel(()=>renderer.options.mods,setMods);
 $('mods-open').addEventListener('click',()=>{clock.pause();sounds.reset(clock.time());syncPlay();});
-$('search-form').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;const value=$<HTMLInputElement>('beatmap-input').value,id=searchId(value);if(!id){status('请输入有效的谱面 / 谱面集 ID 或 osu! 链接','error');return;}search.hide();try{const res=await fetch(`/api/search?q=${id}`),data=await res.json();if(!res.ok)throw new Error(data.error);const row=data.results.find((r:any)=>r.exact)??data.results[0];if(!row)throw new Error('没有匹配的 osu!standard 谱面');await loadOnline(String(row.id));}catch(error){status((error as Error).message,'error');}});
+$('search-form').addEventListener('submit',async e=>{e.preventDefault();if(busy)return;const value=$<HTMLInputElement>('beatmap-input').value,id=searchId(value);if(!id){status('请输入有效的谱面 / 谱面集 ID 或 osu! 链接','error');return;}search.hide();try{const res=await fetch(deployment.api(`search?q=${id}`)),data=await res.json();if(!res.ok)throw new Error(data.error);const row=data.results.find((r:any)=>r.exact)??data.results[0];if(!row)throw new Error('没有匹配的 osu!standard 谱面');await loadOnline(String(row.id));}catch(error){status((error as Error).message,'error');}});
 for(const [id,key]of [['video-enabled','videoEnabled'],['storyboard-enabled','storyboardEnabled']] as const)$<HTMLInputElement>(id).addEventListener('change',e=>{if(renderer.scene){renderer.scene[key]=(e.target as HTMLInputElement).checked;renderer.scene.revision++;}});
 $('demo-button').addEventListener('click',()=>void loadOnline('738063'));
 $<HTMLSelectElement>('skin-select').addEventListener('change',e=>void selectSkin((e.target as HTMLSelectElement).value));
@@ -240,7 +241,7 @@ $('sound-toggle').addEventListener('click',()=>{sounds.enabled=!sounds.enabled;s
 $('mark-a').addEventListener('click',markA);$('mark-b').addEventListener('click',markB);$('clear-loop').addEventListener('click',()=>{loopA=loopB=null;updateLoop();});
 async function fullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.querySelector('.player-panel')!.requestFullscreen();}catch{toast('当前浏览器不允许全屏。');}}
 $('fullscreen').addEventListener('click',()=>void fullscreen());
-$('share').addEventListener('click',async()=>{if(!map||!archiveId)return;try{await navigator.clipboard.writeText(`${location.origin}/?${previewQuery(map.id,clock.time(),renderer.options.mods,practiceRate)}`);toast('已复制本机预览链接（仅本机可访问）');}catch{toast('浏览器未允许复制，请复制地址栏链接。');}});
+$('share').addEventListener('click',async()=>{if(!map||!archiveId)return;try{await navigator.clipboard.writeText(deployment.share(location.origin,previewQuery(map.id,clock.time(),renderer.options.mods,practiceRate)));toast('已复制预览链接（对方需能访问当前服务）');}catch{toast('浏览器未允许复制，请复制地址栏链接。');}});
 document.addEventListener('keydown',e=>{const target=e.target as HTMLElement;if(document.querySelector('dialog[open]')||target.closest('input,select,textarea,button')||e.ctrlKey||e.metaKey||e.altKey)return;if(e.code==='Space'){e.preventDefault();void togglePlay();}else if(e.key==='ArrowLeft'){e.preventDefault();seek(clock.time()-5000);}else if(e.key==='ArrowRight'){e.preventDefault();seek(clock.time()+5000);}else if(e.key.toLowerCase()==='f')void fullscreen();else if(e.key==='[')markA();else if(e.key===']')markB();});
 document.addEventListener('dragover',e=>{e.preventDefault();$('stage').classList.add('drag-over');});document.addEventListener('dragleave',e=>{if(!e.relatedTarget)$('stage').classList.remove('drag-over');});document.addEventListener('drop',e=>{e.preventDefault();$('stage').classList.remove('drag-over');const file=e.dataTransfer?.files[0];if(file){if(/\.osk$/i.test(file.name))void importSkin(file);else void loadLocal(file);}});
 clock.onEnd=()=>{sounds.reset(clock.duration);syncPlay();};

@@ -1,17 +1,10 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { validId, metadata, isZip } from './validation.mjs';
+export { validId, metadata, isZip } from './validation.mjs';
 
 export const MAX_ARCHIVE = 128 * 1024 * 1024;
-export const validId = value => /^[1-9]\d{0,7}$/.test(String(value));
-export function metadata(text, expectedId) {
-  if (!/^\uFEFF?osu file format v\d+/m.test(text)) throw new Error('上游没有返回有效 .osu 文件');
-  const id = Number(text.match(/^BeatmapID\s*:\s*(\d+)/m)?.[1]);
-  const setId = Number(text.match(/^BeatmapSetID\s*:\s*(\d+)/m)?.[1]);
-  if (id !== Number(expectedId) || !validId(setId)) throw new Error('上游谱面 ID 不匹配或缺少谱面集 ID');
-  return {id, setId};
-}
-export function isZip(bytes) { return bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && [3, 5, 7].includes(bytes[2]); }
 async function boundedFetch(url, max, timeout = 60000) {
   const res = await fetch(url, {signal: AbortSignal.timeout(timeout), headers: {'User-Agent': 'OrbitOsuReader/0.1 (local beatmap preview)'}});
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

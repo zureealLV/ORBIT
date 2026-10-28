@@ -1,4 +1,4 @@
-import {validId} from './resources.mjs';
+import {validId} from './validation.mjs';
 
 const clean = value => String(value ?? '').slice(0, 240);
 const finite = value => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -28,7 +28,9 @@ export function createSearch(fetcher=fetch) {
         if(!res.ok)throw new Error(`搜索服务 HTTP ${res.status}`);
         let size=0;const chunks=[];
         for await(const chunk of res.body){size+=chunk.length;if(size>2*1048576)throw new Error('搜索响应过大');chunks.push(chunk);}
-        const payload=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        const bytes=new Uint8Array(size);let offset=0;
+        for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+        const payload=JSON.parse(new TextDecoder().decode(bytes));
         if(![0,-1].includes(payload.status))throw new Error('搜索服务暂不可用');
         // Ignore unrelated upstream data instead of showing a misleading match.
         if(payload.status===0 && (type===2?Number(payload.data?.sid)!==Number(query):!payload.data?.bid_data?.some(b=>Number(b.bid)===Number(query))))return [];
